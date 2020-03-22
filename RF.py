@@ -202,9 +202,9 @@ start_time = time.time()
 
 print("cov len")
 print(cov_len(0.1))
-exit()
 
-w, v, V, C, newC, newC_eig, M = solve_covariance_EVP(lambda r : cov_exp(r, rho=0.2, sigma2=1.0), N = 20, degree = 1)
+
+w, v, V, C, newC, newC_eig, M = solve_covariance_EVP(lambda r : cov_exp(r, rho=0.2, sigma=1.0), N = 20, degree = 1)
 
 print("check cov")
 #print((np.square(C - C_eig)).mean(axis=None))
@@ -219,7 +219,7 @@ w = w[idx]
 #v = v[:,idx]
 
 
-print("Truncation error (v = 1)")
+print("Truncation error (v = 20)")
 e = 20
 eig = 0
 for i in range(e):

@@ -80,7 +80,7 @@ for i in range(len(w)):
 
 for i in range(len(w)):
     randomField[i] = norm.cdf(randomField[i])
-    randomField[i] = gamma.ppf(randomField[i],1.9)
+    randomField[i] = gamma.ppf(randomField[i],1.9,scale=1.5)
 
 rF = set_fem_fun(randomField, FunctionSpace(mesh, 'CG', 1))
 
@@ -88,9 +88,9 @@ rF = set_fem_fun(randomField, FunctionSpace(mesh, 'CG', 1))
 plt.figure()
 im = plot(rF)
 plt.colorbar(im)
-plt.title("Gaussian Field")
+plt.title("Non-aussian Field")
 plt.show()
-#exit()
+exit()
 
 print(type(np.array([1,2])))
 print(type(coords[1]))
@@ -168,6 +168,7 @@ I3 = det(C)
 
 #eta1 = 141
 eta1 = 141*rF
+
 eta2 = 160
 eta3 = 3100
 delta = 2*eta1 + 4*eta2 + 2*eta3

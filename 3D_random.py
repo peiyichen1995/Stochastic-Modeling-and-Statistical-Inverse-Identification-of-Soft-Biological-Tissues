@@ -18,7 +18,8 @@ def cov_exp(r, rho, sigma=1.0):
 
 def solve_covariance_EVP(cov, N, degree=1):
     def setup_FEM(N):
-        mesh = UnitCubeMesh(24,N,N)
+        #mesh = UnitCubeMesh(24,N,N)
+        mesh = BoxMesh(Point(0.0,0.0,0.0),Point(2.0,2.0,1.0),N,N,N)
         V = FunctionSpace(mesh, 'CG', degree)
         u = TrialFunction(V)
         v = TestFunction(V)
@@ -81,7 +82,7 @@ for i in range(len(w)):
 
 for i in range(len(w)):
     randomField[i] = norm.cdf(randomField[i])
-    randomField[i] = gamma.ppf(randomField[i],1.9)
+    randomField[i] = gamma.ppf(randomField[i],1.9,scale=1.1)
 
 rF = set_fem_fun(randomField, FunctionSpace(mesh, 'CG', 1))
 
@@ -117,7 +118,7 @@ V = VectorFunctionSpace(mesh, 'CG',1)
 #left =  CompiledSubDomain("near(x[2], side) && on_boundary", side = 0.0)
 #right = CompiledSubDomain("near(x[2], side) && on_boundary", side = 1.0)
 left =  CompiledSubDomain("near(x[0], side) && on_boundary", side = 0.0)
-right = CompiledSubDomain("near(x[0], side) && on_boundary", side = 1.0)
+right = CompiledSubDomain("near(x[0], side) && on_boundary", side = 2.0)
 
 
 # Define Dirichlet boundary (x = 0 or x = 1)
@@ -131,11 +132,8 @@ right = CompiledSubDomain("near(x[0], side) && on_boundary", side = 1.0)
 #bc_l = DirichletBC(V, c2, left)
 #bc_r = DirichletBC(V, c2, right)
 #bcs = [bc_l, bc_r, bc_f, bc_ba, bc_t, bc_b]
-c = Expression(('0.1', '0', '0'), element = V.ufl_element())
-r = Expression(('0.0',
-                'scale*(y0 + (x[1] - y0)*cos(theta) - (x[2] - z0)*sin(theta) - x[1])',
-                'scale*(z0 + (x[1] - y0)*sin(theta) + (x[2] - z0)*cos(theta) - x[2])'),
-                scale = 0.5, y0 = 0.5, z0 = 0.5, theta = pi/3, element = V.ufl_element())
+c = Expression(('-0.1', '0', '0'), element = V.ufl_element())
+r = Expression(('0', '0', '0'), element = V.ufl_element())
 
 bcl = DirichletBC(V, c, left)
 bcr = DirichletBC(V, r, right)
@@ -158,8 +156,8 @@ M_1 = outer(A_1, A_1)
 J4_1 = tr(C*M_1)
 
 # Body forces
-T  = Constant((0.1, 0.0, 0.0))  # Traction force on the boundary
-B  = Expression(('0.0', '-0.5', '0.0'), element = V.ufl_element())  # Body force per unit volume
+T  = Constant((0.0, 0.0, 0.0))  # Traction force on the boundary
+B  = Expression(('0.0', '0.0', '0.0'), element = V.ufl_element())  # Body force per unit volume
 
 # Invariants of deformation tensors
 I1 = tr(C)
@@ -204,7 +202,7 @@ solver  = NonlinearVariationalSolver(problem)
 prm = solver.parameters
 prm['newton_solver']['absolute_tolerance'] = 1E-8
 prm['newton_solver']['relative_tolerance'] = 1E-7
-prm['newton_solver']['maximum_iterations'] = 1000
+prm['newton_solver']['maximum_iterations'] = 100
 prm['newton_solver']['relaxation_parameter'] = 1.0
 solver.solve()
 
