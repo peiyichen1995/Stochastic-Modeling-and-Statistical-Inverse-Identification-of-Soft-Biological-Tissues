@@ -151,13 +151,9 @@ d = u.geometric_dimension()
 I = Identity(d)             # Identity tensor
 F = I + grad(u)             # Deformation gradient
 C = F.T*F                   # Right Cauchy-Green tensor
-A_1 = as_vector([sqrt(0.5),sqrt(0.5),0])
+A_1 = as_vector([sqrt(0.5),sqrt(0.5)])
 M_1 = outer(A_1, A_1)
 J4_1 = tr(C*M_1)
-A_2 = as_vector([sqrt(0.5),sqrt(0.5),0])
-M_2 = outer(A_2, A_2)
-J4_2 = tr(C*M_2)
-
 
 # Body forces
 T  = Constant((0.0, 0.0, 0.0))  # Traction force on the boundary
@@ -187,9 +183,9 @@ psi_MR = eta1*I1 + eta2*I2 + eta3*I3 - delta*ln(sqrt(I3))
 psi_P = e1*(pow(I3,e2)+pow(I3,-e2)-2)
 # tissue
 psi_ti_1 = k1/2/k2*(exp(pow(conditional(gt(J4_1,1),conditional(gt(J4_1,2),J4_1-1,2*pow(J4_1-1,2)-pow(J4_1-1,3)),0),2)*k2)-1)
-psi_ti_2 = k1*(exp(k2*conditional(gt(J4_2,1),pow((J4_2-1),2),0))-1)/k2/2
+psi_ti_2 = k1*(exp(k2*conditional(gt(J4_1,1),pow((J4_1-1),2),0))-1)/k2/2
 
-psi = psi_MR + psi_P + psi_ti_1 + psi_ti_2
+psi = psi_MR
 # Total potential energy
 Pi = psi*dx - dot(B, u)*dx - dot(T, u)*ds
 
