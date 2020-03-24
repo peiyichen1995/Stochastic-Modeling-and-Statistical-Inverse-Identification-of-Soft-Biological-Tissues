@@ -1,0 +1,8 @@
+/tmp/tmpkqsk8wdn/dolfin_expression_efc302494904cdf60d8b15de9af62689.cpp: In member function ‘virtual void dolfin::dolfin_expression_efc302494904cdf60d8b15de9af62689::eval(Eigen::Ref<Eigen::Matrix<double, -1, 1> >, Eigen::Ref<const Eigen::Matrix<double, -1, 1> >) const’:
+/tmp/tmpkqsk8wdn/dolfin_expression_efc302494904cdf60d8b15de9af62689.cpp:61:29: error: ‘i’ was not declared in this scope
+           values[0] = -0.05*i;
+                             ^
+/tmp/tmpkqsk8wdn/dolfin_expression_efc302494904cdf60d8b15de9af62689.cpp:61:29: note: suggested alternative: ‘id’
+           values[0] = -0.05*i;
+                             ^
+                             id
