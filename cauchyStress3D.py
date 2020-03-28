@@ -11,6 +11,8 @@ from scipy.stats import norm
 import math
 import ufl
 
+from petsc4py import PETSc
+
 
 ## start for model
 
@@ -26,9 +28,9 @@ ffc_options = {"optimize": True, \
 # Create mesh and define function space
 #mesh = UnitSquareMesh(10, 10)
 N = 10
-mesh = BoxMesh(Point(0.0,0.0,0.0),Point(2.0,2.0,1.0),40,40,10)
-V = VectorFunctionSpace(mesh, 'CG',1)
-VVV = TensorFunctionSpace(mesh, 'DG', 0)
+mesh = BoxMesh(Point(0.0,0.0,0.0),Point(10.0,3.0,0.5),40,12,2)
+V = VectorFunctionSpace(mesh, 'CG', 2)
+VVV = TensorFunctionSpace(mesh, 'DG', 1)
 
 # Mark boundary subdomians
 #bottom =  CompiledSubDomain("near(x[0], side) && on_boundary", side = 0.0)
@@ -38,7 +40,7 @@ VVV = TensorFunctionSpace(mesh, 'DG', 0)
 #left =  CompiledSubDomain("near(x[2], side) && on_boundary", side = 0.0)
 #right = CompiledSubDomain("near(x[2], side) && on_boundary", side = 1.0)
 left =  CompiledSubDomain("near(x[0], side) && on_boundary", side = 0.0)
-right = CompiledSubDomain("near(x[0], side) && on_boundary", side = 2.0)
+right = CompiledSubDomain("near(x[0], side) && on_boundary", side = 10.0)
 
 
 # Define Dirichlet boundary (x = 0 or x = 1)
@@ -124,63 +126,37 @@ J = derivative(dPi, u, du)
 
 # Solve variational problem
 
+
+
 problem = NonlinearVariationalProblem(dPi, u, bcs, J)
+
+# PETSc.Options()["pc_type"]="asm"
+# PETSc.Options()["sub_pc_type"]="ilu"
+# PETSc.Options()["ksp_gmres_restart"]=200
+# PETSc.Options()["sub_pc_factor_levels"]=0
+# PETSc.Options()["ksp_max_it"]=200
+
 solver  = NonlinearVariationalSolver(problem)
 prm = solver.parameters
-prm['newton_solver']['absolute_tolerance'] = 1E-8
-prm['newton_solver']['relative_tolerance'] = 1E-7
-prm['newton_solver']['maximum_iterations'] = 100
+# prm['snes_solver']['absolute_tolerance'] = 1e-8
+# prm['snes_solver']['relative_tolerance'] = 1e-6
+# prm['snes_solver']['maximum_iterations'] = 20
+# prm['snes_solver']['line_search'] = 'bt'
+# prm['snes_solver']['preconditioner'] = 'asm'
+prm['newton_solver']['absolute_tolerance'] = 1E-08
+prm['newton_solver']['relative_tolerance'] = 1E-12
+prm['newton_solver']['maximum_iterations'] = 20
 prm['newton_solver']['relaxation_parameter'] = 1.0
-solver.solve()
+prm['newton_solver']['lu_solver']['symmetric'] = True
+prm['newton_solver']['krylov_solver']['maximum_iterations'] = 200
 
-# def PK2(u): #Piola-Kirchhoff Stress
-#     d = u.geometric_dimension()
-#     I = Identity(d)             # Identity tensor
-#     F = I + grad(u)             # Deformation gradient
-#     C = F.T*F                   # Right Cauchy-Green tensor
-#     A_1 = as_vector([sqrt(0.5),sqrt(0.5),0])
-#     M_1 = outer(A_1, A_1)
-#     J4_1 = tr(C*M_1)
-#     A_2 = as_vector([sqrt(0.5),sqrt(0.5),0])
-#     M_2 = outer(A_2, A_2)
-#     J4_2 = tr(C*M_2)
-#     I1 = tr(C)
-#     I2 = 1/2*(tr(C)*tr(C) - tr(C*C))
-#     I3 = det(C)
-#
-#     eta1 = 141
-#     #eta1 = 141*rF
-#     eta2 = 160
-#     eta3 = 3100
-#     delta = 2*eta1 + 4*eta2 + 2*eta3
-#
-#     e1 = 0.005
-#     e2 = 10
-#
-#     k1 = 0.1
-#     k2 = 0.04
-#
-#
-#     # compressible Mooney-Rivlin model
-#     psi_MR = eta1*I1 + eta2*I2 + eta3*I3 - delta*ln(sqrt(I3))
-#     # penalty
-#     psi_P = e1*(pow(I3,e2)+pow(I3,-e2)-2)
-#     # tissue
-#     psi_ti_1 = k1/2/k2*(exp(pow(conditional(gt(J4_1,1),conditional(gt(J4_1,2),J4_1-1,2*pow(J4_1-1,2)-pow(J4_1-1,3)),0),2)*k2)-1)
-#     psi_ti_2 = k1*(exp(k2*conditional(gt(J4_2,1),pow((J4_2-1),2),0))-1)/k2/2
-#
-#     psi = psi_MR # + psi_P + psi_ti_1 + psi_ti_2
-#
-#     # Ss = diff(psi,variable(F))
-#     Ss = diff(I1,variable(C))
-#     return Ss
+solver.solve()
 
 PK2 = 2.0*diff(psi,C)
 PK2Project = project(PK2,VVV)
-p = Point(2.0,2.0,0.5);
 
-print("PK2")
-print(PK2Project(p))
+file = File("cauchyStress3Dsolution.pvd")
+file << u
 
-file = File("PK2Tensor.pvd")
-file << PK2Project
+file = XDMFFile("PK2Tensor.xdmf")
+file.write(PK2Project,0)
