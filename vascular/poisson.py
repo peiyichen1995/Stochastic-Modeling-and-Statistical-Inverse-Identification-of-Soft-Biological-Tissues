@@ -21,15 +21,15 @@ ffc_options = {"optimize": True, \
 
 # Create mesh and mesh faces
 mesh = Mesh()
-with XDMFFile("mesh.xdmf") as infile:
+with XDMFFile("mesh/mesh.xdmf") as infile:
     infile.read(mesh)
-File("vascular.pvd").write(mesh)
+File("mesh/vascular.pvd").write(mesh)
 
 mvc = MeshValueCollection("size_t", mesh, 1)
-with XDMFFile("mf.xdmf") as infile:
+with XDMFFile("mesh/mf.xdmf") as infile:
     infile.read(mvc, "face_id")
 mf = cpp.mesh.MeshFunctionSizet(mesh, mvc)
-File("vascular_facets.pvd").write(mf)
+File("mesh/vascular_facets.pvd").write(mf)
 
 # Define function spaces
 V = VectorFunctionSpace(mesh, 'CG', 2)
@@ -108,15 +108,11 @@ prm['newton_solver']['relaxation_parameter'] = 1.0
 prm['newton_solver']['lu_solver']['symmetric'] = True
 prm['newton_solver']['krylov_solver']['maximum_iterations'] = 200
 
-info(mesh)
+solver.solve()
 
-# solver.solve()
-#
-# PK2 = 2.0*diff(psi,C)
-# PK2Project = project(PK2,VVV)
-#
-# file = File("cauchyStress3Dsolution.pvd")
-# file << u
-#
-# file = XDMFFile("PK2Tensor.xdmf")
-# file.write(PK2Project,0)
+PK2 = 2.0*diff(psi,C)
+PK2Project = project(PK2, VVV)
+
+file = XDMFFile("output/output.xdmf")
+file.write(PK2Project)
+file.write(u)
