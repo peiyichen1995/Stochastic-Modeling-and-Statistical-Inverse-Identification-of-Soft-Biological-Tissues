@@ -12,8 +12,9 @@ ffc_options = {"optimize": True, \
                "precompute_ip_const": True}
 
 # Create mesh and define function space
-mesh = UnitSquareMesh(160, 160)
+mesh = UnitSquareMesh(5, 5)
 V = VectorFunctionSpace(mesh, 'CG',1)
+
 
 # Mark boundary subdomians
 bottom =  CompiledSubDomain("near(x[0], side) && on_boundary", side = 0.0)

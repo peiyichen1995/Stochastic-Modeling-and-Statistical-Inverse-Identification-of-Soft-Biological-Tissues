@@ -1,0 +1,8 @@
+/tmp/tmpgxl42sn4/dolfin_expression_c346e5b9d98ebf7acccaf1189a6d026e.cpp: In member function ‘virtual void dolfin::dolfin_expression_c346e5b9d98ebf7acccaf1189a6d026e::eval(Eigen::Ref<Eigen::Matrix<double, -1, 1> >, Eigen::Ref<const Eigen::Matrix<double, -1, 1> >) const’:
+/tmp/tmpgxl42sn4/dolfin_expression_c346e5b9d98ebf7acccaf1189a6d026e.cpp:61:23: error: ‘n’ was not declared in this scope
+           values[0] = n[0];
+                       ^
+/tmp/tmpgxl42sn4/dolfin_expression_c346e5b9d98ebf7acccaf1189a6d026e.cpp:61:23: note: suggested alternative: ‘yn’
+           values[0] = n[0];
+                       ^
+                       yn

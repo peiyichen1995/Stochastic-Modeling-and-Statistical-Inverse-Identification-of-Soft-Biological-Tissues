@@ -21,16 +21,18 @@ ffc_options = {"optimize": True, \
 
 # Create mesh and mesh faces
 mesh = Mesh()
-with XDMFFile("mesh/mesh.xdmf") as infile:
+with XDMFFile("mesh.xdmf") as infile:
     infile.read(mesh)
 File("mesh/vascular.pvd").write(mesh)
 
 mvc = MeshValueCollection("size_t", mesh, 1)
-with XDMFFile("mesh/mf.xdmf") as infile:
+with XDMFFile("mf.xdmf") as infile:
     infile.read(mvc, "face_id")
 mf = cpp.mesh.MeshFunctionSizet(mesh, mvc)
 File("mesh/vascular_facets.pvd").write(mf)
 
+ds = Measure("ds", domain=mesh, subdomain_data=mf)
+n = FacetNormal(mesh)
 # Define function spaces
 V = VectorFunctionSpace(mesh, 'CG', 2)
 VVV = TensorFunctionSpace(mesh, 'DG', 1)
@@ -41,9 +43,9 @@ v  = TestFunction(V)             # Test function
 u  = Function(V)                 # Displacement from previous iteration
 
 # Mark boundary subdomians
-bc1 = DirichletBC(V, Constant((0.1, 0.0, 0.0)), mf, 7)
-bc2 = DirichletBC(V, Constant((0.0, 0.0, 0.0)), mf, 8)
-bcs = [bc1, bc2]
+#bc1 = DirichletBC(V, Constant((0.1, 0.0, 0.0)), mf, 7)
+#bc2 = DirichletBC(V, Constant((0.0, 0.0, 0.0)), mf, 8)
+bcs = []
 
 # Kinematics
 d = u.geometric_dimension()
@@ -58,7 +60,7 @@ M_2 = outer(A_2, A_2)
 J4_2 = tr(C*M_2)
 
 # Body forces
-T  = Constant((0.0, 0.0, 0.0))  # Traction force on the boundary
+P  = Constant(100.0)  # Traction force on the boundary
 B  = Expression(('0.0', '0.0', '0.0'), element = V.ufl_element())  # Body force per unit volume
 
 # Invariants of deformation tensors
@@ -89,13 +91,15 @@ psi_ti_2 = k1*(exp(k2*conditional(gt(J4_2,1),pow((J4_2-1),2),0))-1)/k2/2
 psi = psi_MR + psi_P + psi_ti_1 + psi_ti_2
 
 # Total potential energy
-Pi = psi*dx - dot(B, u)*dx - dot(T, u)*ds
+Pi = psi*dx - dot(B, u)*dx - dot(-P*n, u)*ds(1)
+
 
 # Compute first variation of Pi (directional derivative about u in the direction of v)
 dPi = derivative(Pi, u, v)
 
 # Compute Jacobian of F
 J = derivative(dPi, u, du)
+
 
 # Solve variational problem
 problem = NonlinearVariationalProblem(dPi, u, bcs, J)
@@ -113,6 +117,8 @@ solver.solve()
 PK2 = 2.0*diff(psi,C)
 PK2Project = project(PK2, VVV)
 
-file = XDMFFile("output/output.xdmf")
-file.write(PK2Project)
-file.write(u)
+file = File("vascularPressure.pvd")
+file << u
+
+file = XDMFFile("PK2TensorVascularPressure.xdmf")
+file.write(PK2Project,0)
