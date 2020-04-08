@@ -27,21 +27,39 @@ v9 = [1.0000000000000624, 1.0018605094754685, 1.003408927585228, 1.0046989107519
 
 v10 = [1.0000000000000624, 1.0017943234289786, 1.003287378607936, 1.0045310028191767, 1.0055660951070142, 1.0064218762561687, 1.0071156564391732, 1.007653161199571, 1.0080798571582392, 1.0084209083428994];
 
+writeToCSV(Displacement', v0', 'penalty_k1_0.csv');
+writeToCSV(Displacement', v1', 'penalty_k1_1.csv');
+writeToCSV(Displacement', v2', 'penalty_k1_2.csv');
+writeToCSV(Displacement', v3', 'penalty_k1_3.csv');
+writeToCSV(Displacement', v4', 'penalty_k1_4.csv');
+writeToCSV(Displacement', v5', 'penalty_k1_5.csv');
+writeToCSV(Displacement', v6', 'penalty_k1_6.csv');
+writeToCSV(Displacement', v7', 'penalty_k1_7.csv');
+writeToCSV(Displacement', v8', 'penalty_k1_8.csv');
+writeToCSV(Displacement', v9', 'penalty_k1_9.csv');
+writeToCSV(Displacement', v10', 'penalty_k1_10.csv');
 
-plot(Displacement,(v0-1)*100) % percent volume change with respect to initial volume
-hold on
-plot(Displacement,(v1-1)*100)
-plot(Displacement,(v2-1)*100)
-plot(Displacement,(v3-1)*100)
-plot(Displacement,(v4-1)*100)
-plot(Displacement,(v5-1)*100)
-plot(Displacement,(v6-1)*100)
-plot(Displacement,(v7-1)*100)
-plot(Displacement,(v8-1)*100)
-plot(Displacement,(v9-1)*100)
-plot(Displacement,(v10-1)*100)
 
-legend("e1 = 0", "e1 = 1", "e1 = 2", "e1 = 3", "e1 = 4", "e1 = 5", "e1 = 6", "e1 = 7", "e1 = 8", "e1 = 9", "e1 = 10");
+% plot(Displacement,(v0-1)*100) % percent volume change with respect to initial volume
+% hold on
+% plot(Displacement,(v1-1)*100)
+% plot(Displacement,(v2-1)*100)
+% plot(Displacement,(v3-1)*100)
+% plot(Displacement,(v4-1)*100)
+% plot(Displacement,(v5-1)*100)
+% plot(Displacement,(v6-1)*100)
+% plot(Displacement,(v7-1)*100)
+% plot(Displacement,(v8-1)*100)
+% plot(Displacement,(v9-1)*100)
+% plot(Displacement,(v10-1)*100)
+% 
+% legend("e1 = 0", "e1 = 1", "e1 = 2", "e1 = 3", "e1 = 4", "e1 = 5", "e1 = 6", "e1 = 7", "e1 = 8", "e1 = 9", "e1 = 10");
+% 
+% xlabel("Displacement")
+% ylabel("percent volume change with respect to initial volume")
 
-xlabel("Displacement")
-ylabel("percent volume change with respect to initial volume")
+function writeToCSV(x, y, filename)
+data = [x, y];
+table = array2table(data, 'VariableNames', {'x', 'y'});
+writetable(table, filename, 'Delimiter', ' ');
+end

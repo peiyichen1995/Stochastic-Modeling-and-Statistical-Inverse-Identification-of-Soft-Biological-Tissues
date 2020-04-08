@@ -79,3 +79,24 @@ legend(...
 % legend("tension","compression");
 % title("Tissue orientation [0,1,0] k1 = 0.1")
 
+
+writeToCSV(Displacement', Tension0', 'T_0.csv');
+writeToCSV(Displacement', Compression0', 'C_0.csv');
+writeToCSV(Displacement', Tension10', 'T_10.csv');
+writeToCSV(Displacement', Compression10', 'C_10.csv');
+writeToCSV(Displacement', Tension20', 'T_20.csv');
+writeToCSV(Displacement', Compression20', 'C_20.csv');
+writeToCSV(Displacement', Tension30', 'T_30.csv');
+writeToCSV(Displacement', Compression30', 'C_30.csv');
+writeToCSV(Displacement', Tension40', 'T_40.csv');
+writeToCSV(Displacement', Compression40', 'C_40.csv');
+writeToCSV(Displacement', Tension50', 'T_50.csv');
+writeToCSV(Displacement', Compression50', 'C_50.csv');
+
+
+function writeToCSV(x, y, filename)
+data = [x, y];
+table = array2table(data, 'VariableNames', {'x', 'y'});
+writetable(table, filename, 'Delimiter', ' ');
+end
+

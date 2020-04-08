@@ -1,8 +1,16 @@
+# fix one cut
+from __future__ import division
 from dolfin import *
+import scipy.sparse.linalg as spla
+import numpy as np
+import scipy.linalg as dla
+import matplotlib.pyplot as plt
+import numpy.linalg as linalg
+from scipy.stats import gamma
+from scipy.stats import norm
+
 import math
 import ufl
-import numpy
-
 
 class Problem(NonlinearProblem):
     def __init__(self, J, F, bcs):
@@ -37,6 +45,8 @@ class CustomSolver(NewtonSolver):
         PETScOptions.set("pc_type", "asm")
         PETScOptions.set("sub_pc_type", "ilu")
         PETScOptions.set("sub_pc_factor_levels", 10)
+        PETScOptions.set("ksp_diagonal_scale")
+        PETScOptions.set("ksp_diagonal_scale_fix")
 
         self.linear_solver().set_from_options()
 
@@ -48,64 +58,70 @@ ffc_options = {"optimize": True, \
                "precompute_basis_const": True, \
                "precompute_ip_const": True}
 
-# Create mesh and define function space
+# Create mesh and mesh faces
 mesh = Mesh()
-with XDMFFile("mesh/mesh.xdmf") as infile:
+with XDMFFile("mesh.xdmf") as infile:
     infile.read(mesh)
-File("mesh/square.pvd").write(mesh)
+File("mesh/vascular.pvd").write(mesh)
 
 mvc = MeshValueCollection("size_t", mesh, 1)
-with XDMFFile("mesh/mf.xdmf") as infile:
+with XDMFFile("mf.xdmf") as infile:
     infile.read(mvc, "face_id")
 mf = cpp.mesh.MeshFunctionSizet(mesh, mvc)
-File("mesh/square.pvd").write(mf)
+File("mesh/vascular_facets.pvd").write(mf)
 
 ds = Measure("ds", domain=mesh, subdomain_data=mf)
 n = FacetNormal(mesh)
-
 # Define function spaces
 V = VectorFunctionSpace(mesh, 'CG', 2)
-
-# Define Dirichlet boundary (x = 0 or x = 1)
-c = Constant((0.0, 0.0, 0.0))
-p = Constant(100)
-
-# c_fixed = Expression(('0.0', '0.0', '0.0'), element = V.ufl_element())
-# point =  CompiledSubDomain("near(x[0], side1) && near(x[1], side2) && near(x[2], side3)", side1 = 0, side2 = 0, side3 = 0)
-# bcp = DirichletBC(V, c_fixed, point, method="pointwise")
-# bcs = [bcp]
-bcs = []
+VVV = TensorFunctionSpace(mesh, 'DG', 1)
 
 # Define functions
 du = TrialFunction(V)            # Incremental displacement
 v  = TestFunction(V)             # Test function
 u  = Function(V)                 # Displacement from previous iteration
 
+# Mark boundary subdomians
+#bc1 = DirichletBC(V, Constant((0.1, 0.0, 0.0)), mf, 7)
+#bc2 = DirichletBC(V, Constant((0.0, 0.0, 0.0)), mf, 8)
+# c_fixed = Expression(('0.0', '0.0', '0.0'), element = V.ufl_element())
+#
+# point = CompiledSubDomain("near(x[0], side1) && near(x[1], side2) && near(x[2], side3)", side1 = 0.1568500000016373, side2 = 3.563667451675278, side3 = 3.609812666389581)
+#
+# bcp = DirichletBC(V, c_fixed, point, method="pointwise")
+
+
+bc1 = DirichletBC(V, Constant((0, 0.0, 0.0)), mf, 7)
+bc2 = DirichletBC(V.sub(2), Constant(0), mf, 8)
+
+bcs = [bc1, bc2]
+
+
 # Kinematics
 d = u.geometric_dimension()
 I = Identity(d)             # Identity tensor
 F = I + grad(u)             # Deformation gradient
-C = F.T*F                   # Right Cauchy-Green tensor
-
-# Body force
-B = Constant((0.0, 0.0, 0.0))
-
-# Invariants of deformation tensors
-I1 = tr(C)
-I2 = 1/2*(tr(C)*tr(C) - tr(C*C))
-I3 = det(C)
-
-# Elasticity parameters
-eta1 = 141
-eta2 = 160
-eta3 = 3100
-delta = 2*eta1 + 4*eta2 + 2*eta3
+C = variable(F.T*F)                   # Right Cauchy-Green tensor
 A_1 = as_vector([sqrt(0.5),sqrt(0.5),0])
 M_1 = outer(A_1, A_1)
 J4_1 = tr(C*M_1)
 A_2 = as_vector([-sqrt(0.5),sqrt(0.5),0])
 M_2 = outer(A_2, A_2)
 J4_2 = tr(C*M_2)
+
+# Body forces
+P  = Constant(1)  # Traction force on the boundary
+B  = Expression(('0.0', '0.0', '0.0'), element = V.ufl_element())  # Body force per unit volume
+
+# Invariants of deformation tensors
+I1 = tr(C)
+I2 = 1/2*(tr(C)*tr(C) - tr(C*C))
+I3 = det(C)
+
+eta1 = 141
+eta2 = 160
+eta3 = 3100
+delta = 2*eta1 + 4*eta2 + 2*eta3
 
 e1 = 0.005
 e2 = 10
@@ -122,31 +138,38 @@ psi_P = e1*(pow(I3,e2)+pow(I3,-e2)-2)
 psi_ti_1 = k1*(exp(k2*conditional(gt(J4_1,1),pow((J4_1-1),2),0))-1)/k2/2
 psi_ti_2 = k1*(exp(k2*conditional(gt(J4_2,1),pow((J4_2-1),2),0))-1)/k2/2
 
-# psi = psi_MR + psi_P + psi_ti_1 + psi_ti_2
-psi = psi_MR
+psi = psi_MR + psi_P + psi_ti_1 + psi_ti_2
 
 # Total potential energy
-Pi = psi*dx - dot(B, u)*dx - dot(-p*n, u)*ds(2) - dot(-p*n, u)*ds(4)
+Pi = psi*dx - dot(B, u)*dx - dot(-P*n, u)*ds(1)
 
 # Compute first variation of Pi (directional derivative about u in the direction of v)
-F = derivative(Pi, u, v)
+dPi = derivative(Pi, u, v)
 
 # Compute Jacobian of F
-J = derivative(F, u, du)
+J = derivative(dPi, u, du)
 
-# problem = NonlinearVariationalProblem(F, u, bcs, J)
+
+# Solve variational problem
+# problem = NonlinearVariationalProblem(dPi, u, bcs, J)
 # solver  = NonlinearVariationalSolver(problem)
 # prm = solver.parameters
 # prm['newton_solver']['absolute_tolerance'] = 1E-06
 # prm['newton_solver']['relative_tolerance'] = 1E-08
 # prm['newton_solver']['maximum_iterations'] = 20
+# prm['newton_solver']['relaxation_parameter'] = 1.0
 # prm['newton_solver']['lu_solver']['symmetric'] = True
 # prm['newton_solver']['krylov_solver']['maximum_iterations'] = 1000
 
-problem = Problem(J, F, bcs)
+problem = Problem(J, dPi, bcs)
 solver = CustomSolver()
 solver.solve(problem, u.vector())
 
-# Save solution in VTK format
-file = File("2DPressure.pvd")
+PK2 = 2.0*diff(psi,C)
+PK2Project = project(PK2, VVV)
+
+file = File("vascularPressurePointFixed.pvd")
 file << u
+
+file = XDMFFile("PK2TensorVascularPressurePointFixed.xdmf")
+file.write(PK2Project,0)
