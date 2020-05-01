@@ -175,9 +175,9 @@ def solve_covariance_EVP(cov, N, degree=1):
     for i in range(L):
         for j in range(L):
             if j <= i:
-                v = cov(np.linalg.norm(coords[i]/2 + coords[i+1]/2 - coords[j]/2 - coords[j+1]/2))
-                newC[i,j] = v
-                newC[j,i] = v
+                value = cov(np.linalg.norm(coords[i]/2 + coords[i+1]/2 - coords[j]/2 - coords[j+1]/2))
+                newC[i,j] = value
+                newC[j,i] = value
                 #print(newC[i,j]-newC_eig[i,j])
 
 
@@ -204,7 +204,7 @@ print("cov len")
 print(cov_len(0.1))
 
 
-w, v, V, C, newC, newC_eig, M = solve_covariance_EVP(lambda r : cov_exp(r, rho=0.2, sigma=1.0), N = 20, degree = 1)
+w, v, V, C, newC, newC_eig, M = solve_covariance_EVP(lambda r : cov_exp(r, rho=0.2, sigma=1.0), N = 100, degree = 1)
 
 print("check cov")
 #print((np.square(C - C_eig)).mean(axis=None))
@@ -253,10 +253,12 @@ for i in range(len(w)):
 
 rF = set_fem_fun(randomField, V)
 
+file = File("2D_Random.pvd")
+file << rF
 
-plt.figure()
-im = plot(rF)
-plt.colorbar(im)
-plt.title("randomField")
+#plt.figure()
+#im = plot(rF)
+#plt.colorbar(im)
+#plt.title("randomField")
 # plt.savefig('randomField.png')
-plt.show()
+#plt.show()

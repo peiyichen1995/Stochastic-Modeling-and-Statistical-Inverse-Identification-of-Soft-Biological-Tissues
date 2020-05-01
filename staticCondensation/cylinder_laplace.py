@@ -78,3 +78,130 @@ solver.solve()
 
 file = File("laplace.pvd")
 file << u
+
+# Write `f` to a file:
+fFile = HDF5File(MPI.comm_world,"f.h5","w")
+fFile.write(u,"/f")
+fFile.close()
+
+# Read the contents of the file back into a new function, `f2`:
+u_read = Function(V)
+fFile = HDF5File(MPI.comm_world,"f.h5","r")
+fFile.read(u_read,"/f")
+fFile.close()
+
+file = File("read_laplace.pvd")
+file << u_read
+V_cyl = VectorFunctionSpace(mesh, 'CG', 2)
+u_grad = project(grad(u), V_cyl)
+
+u_array = u_grad.vector().get_local()
+
+print(u_array)
+
+max_u = u_array.max()
+u_array /= max_u
+u_grad.vector()[:] = u_array
+# u_grad.vector().set_local(u_array)  # alternative
+e3 = u_grad
+print(type(e3))
+
+e2 = cross(e3, e3)
+print(type(e2))
+
+a = sqrt(0.5) * e2
+A = outer(a,a)
+
+# Check the difference between the functions:
+print(assemble(((u-u_read)**2)*dx))
+
+#############################################
+print("solving...")
+
+
+VVV = TensorFunctionSpace(mesh, 'DG', 1)
+# Define functions
+du = TrialFunction(V_cyl)            # Incremental displacement
+v = TestFunction(V_cyl)             # Test function
+u = Function(V_cyl)                 # Displacement from previous iteration
+
+# Kinematics
+d = u.geometric_dimension()
+I = Identity(d)             # Identity tensor
+F = I + grad(u)             # Deformation gradient
+# C = variable(F.T*F)                   # Right Cauchy-Green tensor
+C = F.T*F
+A_1 = as_vector([sqrt(0.5), sqrt(0.5), 0])
+M_1 = outer(A_1, A_1)
+J4_1 = tr(C*A)
+A_2 = as_vector([-sqrt(0.5), sqrt(0.5), 0])
+M_2 = outer(A_2, A_2)
+J4_2 = tr(C*A)
+
+# Body forces
+T = Constant((0.0, 0.0, 0.0))  # Traction force on the boundary
+# Body force per unit volume
+B = Expression(('0.0', '0.0', '0.0'), element=V.ufl_element())
+
+# Invariants of deformation tensors
+I1 = tr(C)
+I2 = 1/2*(tr(C)*tr(C) - tr(C*C))
+I3 = det(C)
+eta1 = 141
+eta2 = 160
+eta3 = 3100
+delta = 2*eta1 + 4*eta2 + 2*eta3
+
+e1 = 0.005
+e2 = 10
+
+k1 = 100000
+k2 = 0.04
+
+# compressible Mooney-Rivlin model
+psi_MR = eta1*I1 + eta2*I2 + eta3*I3 - delta*ln(sqrt(I3))
+# penalty
+psi_P = e1*(pow(I3, e2)+pow(I3, -e2)-2)
+# tissue
+# psi_ti_1 = k1/2/k2*(exp(pow(conditional(gt(J4_1,1),conditional(gt(J4_1,2),J4_1-1,2*pow(J4_1-1,2)-pow(J4_1-1,3)),0),2)*k2)-1)
+psi_ti_1 = k1*(exp(k2*conditional(gt(J4_1, 1), pow((J4_1-1), 2), 0))-1)/k2/2
+psi_ti_2 = k1*(exp(k2*conditional(gt(J4_2, 1), pow((J4_2-1), 2), 0))-1)/k2/2
+
+psi = psi_MR  # + psi_P + psi_ti_1 + psi_ti_2
+
+# FacetFunction("size_t", mesh)
+boundaries = MeshFunction('size_t', mesh, mesh.topology().dim()-1)
+boundaries.set_all(0)
+
+
+class Inner(SubDomain):
+    def inside(self, x, on_boundary):
+        return (between(x[1], (-1.1, 1.1)) and between(x[0], (-1.1, 1.1)) and between(x[2], (-0.1, 6)))
+
+
+Inner = Inner()
+Inner.mark(boundaries, 1)
+ds = Measure("ds", domain=mesh, subdomain_data=boundaries)
+
+# Total potential energy
+Pi = psi*dx - dot(B, u)*dx - dot(T, u)*ds - dot(-P*n, u)*ds(1)
+
+# Compute first variation of Pi (directional derivative about u in the direction of v)
+dPi = derivative(Pi, u, v)
+
+# Compute Jacobian of F
+J = derivative(dPi, u, du)
+
+# Solve variational problem
+problem = Problem(J, dPi, bcs)
+solver = CustomSolver()
+solver.solve(problem, u.vector())
+
+PK2 = 2.0*diff(psi, C)
+PK2Project = project(PK2, VVV)
+
+file = File("cylinder.pvd")
+file << u
+
+file = XDMFFile("cylinder.xdmf")
+file.write(PK2Project, 0)

@@ -66,7 +66,7 @@ def set_fem_fun(vec, fs):
 
 
 
-w, v, V, mesh, coords = solve_covariance_EVP(lambda r : cov_exp(r, rho=0.1, sigma=1.0), N = 15, degree = 1)
+w, v, V, mesh, coords = solve_covariance_EVP(lambda r : cov_exp(r, rho=0.2, sigma=1.0), N = 50, degree = 1)
 
 idx = w.argsort()[::-1]
 w = w[idx]
@@ -168,8 +168,8 @@ I1 = tr(C)
 I2 = 1/2*(tr(C)*tr(C) - tr(C*C))
 I3 = det(C)
 
-eta1 = 141
-#eta1 = 141*rF
+#eta1 = 141
+eta1 = 141*rF
 eta2 = 160
 eta3 = 3100
 delta = 2*eta1 + 4*eta2 + 2*eta3
