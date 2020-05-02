@@ -142,8 +142,8 @@ e1 = sqrt(inner(e1, e1))
 e2 = sqrt(inner(e2, e2))
 e3 = sqrt(inner(e3, e3))
 
-a1 = sqrt(3)/2*e1 + 1/2*e2
-a2 = sqrt(3)/2*e1 - 1/2*e2
+a1 = sqrt(3)/2*e3 + 1/2*e2
+a2 = sqrt(3)/2*e3 - 1/2*e2
 
 ##################################
 # Define functions
@@ -170,7 +170,7 @@ M_2 = outer(a2, a2)
 J4_2 = tr(C*M_2)
 
 # Body forces
-P  = Constant(10)  # Traction force on the boundary
+P  = Constant(0.1)  # Traction force on the boundary
 B  = Expression(('0.0', '0.0', '0.0'), element = V.ufl_element())  # Body force per unit volume
 
 # Invariants of deformation tensors
