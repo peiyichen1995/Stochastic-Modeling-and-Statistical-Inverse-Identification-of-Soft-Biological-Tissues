@@ -108,41 +108,39 @@ V_g = FunctionSpace(mesh, 'CG', 2)
 
 
 # Read the contents of the file back into a new function, `f2`:
-u_read = Function(V_g)
+u1_read = Function(V_g)
 fFile = HDF5File(MPI.comm_world,"u1.h5","r")
-fFile.read(u_read,"/f")
+fFile.read(u1_read,"/f")
 fFile.close()
-e3 = grad(u_read)
+e3 = grad(u1_read)
 
 # Read the contents of the file back into a new function, `f2`:
+u2_read = Function(V_g)
 fFile = HDF5File(MPI.comm_world,"u2.h5","r")
-fFile.read(u_read,"/f")
+fFile.read(u2_read,"/f")
 fFile.close()
-e1 = grad(u_read)
+e1 = grad(u2_read)
 
 # e2 from e1 and e3
 e2 = my_cross(e3, e1)
 
-e1Project = project(e1, V, solver_type="mumps")
-file = XDMFFile("e1.xdmf")
-file.write(e1Project,0)
-
-e2Project = project(e2, V, solver_type="mumps")
-file = XDMFFile("e2.xdmf")
-file.write(e2Project,0)
-
-e3Project = project(e3, V, solver_type="mumps")
-file = XDMFFile("e3.xdmf")
-file.write(e3Project,0)
+# e1Project = project(e1, V, solver_type="mumps")
+# file = XDMFFile("e1.xdmf")
+# file.write(e1Project,0)
+#
+# e2Project = project(e2, V, solver_type="mumps")
+# file = XDMFFile("e2.xdmf")
+# file.write(e2Project,0)
+#
+# e3Project = project(e3, V, solver_type="mumps")
+# file = XDMFFile("e3.xdmf")
+# file.write(e3Project,0)
 
 
 # normalize the gradient field
 e1 = sqrt(inner(e1, e1))
 e2 = sqrt(inner(e2, e2))
 e3 = sqrt(inner(e3, e3))
-
-
-exit()
 
 a1 = sqrt(3)/2*e1 + 1/2*e2
 a2 = sqrt(3)/2*e1 - 1/2*e2
@@ -205,19 +203,16 @@ psi = psi_MR + psi_P + psi_ti_1 + psi_ti_2
 # Total potential energy
 Pi = psi*dx - dot(B, u)*dx - dot(-P*n, u)*ds(1)
 
-
 # Compute first variation of Pi (directional derivative about u in the direction of v)
 dPi = derivative(Pi, u, v)
 
 # Compute Jacobian of F
 J = derivative(dPi, u, du)
 
-
 # Solve variational problem
 problem = Problem(J, dPi, bcs)
 solver = CustomSolver()
 solver.solve(problem, u.vector())
-
 
 PK2 = 2.0*diff(psi,C)
 PK2Project = project(PK2, VVV)
