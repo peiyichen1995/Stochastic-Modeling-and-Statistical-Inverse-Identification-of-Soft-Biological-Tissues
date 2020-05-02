@@ -31,9 +31,10 @@ cylinder_i = Cylinder(Point(0, 0, 0), Point(0, 0, 3), 1, 1)
 geometry = cylinder_o - cylinder_i
 
 mesh = generate_mesh(geometry, 10)
+info(mesh)
 n = FacetNormal(mesh)
 V = FunctionSpace(mesh, 'CG', 2)
-
+V_cyl = VectorFunctionSpace(mesh, 'CG', 2)
 
 # Mark boundary subdomians
 left = CompiledSubDomain("near(x[2], side) && on_boundary", side=0.0)
@@ -75,45 +76,29 @@ prm['newton_solver']['krylov_solver']['maximum_iterations'] = 200
 
 solver.solve()
 
-
-file = File("laplace.pvd")
-file << u
+# file = File("laplace.pvd")
+# file << u
 
 # Write `f` to a file:
-fFile = HDF5File(MPI.comm_world,"f.h5","w")
-fFile.write(u,"/f")
+fFile = HDF5File(MPI.comm_world,"f2.h5","w")
+fFile.write(u, "f")
 fFile.close()
 
-# Read the contents of the file back into a new function, `f2`:
-u_read = Function(V)
-fFile = HDF5File(MPI.comm_world,"f.h5","r")
-fFile.read(u_read,"/f")
-fFile.close()
+mesh_file = File("mesh.xml")
+mesh_file << mesh
 
-file = File("read_laplace.pvd")
-file << u_read
-V_cyl = VectorFunctionSpace(mesh, 'CG', 2)
-u_grad = project(grad(u), V_cyl)
+exit()
 
-u_array = u_grad.vector().get_local()
+u_grad = grad(u)
 
-print(u_array)
+# normalize the gradient field
+u_grad = sqrt(inner(u_grad, u_grad))
 
-max_u = u_array.max()
-u_array /= max_u
-u_grad.vector()[:] = u_array
-# u_grad.vector().set_local(u_array)  # alternative
-e3 = u_grad
-print(type(e3))
+print(type(u_grad))
 
-e2 = cross(e3, e3)
-print(type(e2))
-
+e2 = u_grad
 a = sqrt(0.5) * e2
 A = outer(a,a)
-
-# Check the difference between the functions:
-print(assemble(((u-u_read)**2)*dx))
 
 #############################################
 print("solving...")

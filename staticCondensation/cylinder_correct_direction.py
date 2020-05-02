@@ -14,6 +14,8 @@ import ufl
 
 from petsc4py import PETSc
 
+def my_cross(a,b):
+       return as_vector(( a[1]*b[2]-a[2]*b[1],  a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0] ))
 
 def build_nullspace(V):
     x = Function(V).vector()
@@ -91,7 +93,9 @@ cylinder_i = Cylinder(Point(0, 0, 0), Point(0, 0, 3), 1, 1)
 
 geometry = cylinder_o - cylinder_i
 
-mesh = generate_mesh(geometry, 10)
+# mesh = generate_mesh(geometry, 10)
+mesh = Mesh("mesh.xml")
+info(mesh)
 n = FacetNormal(mesh)
 V = VectorFunctionSpace(mesh, 'CG', 2)
 VVV = TensorFunctionSpace(mesh, 'DG', 1)
@@ -99,25 +103,30 @@ V_read = FunctionSpace(mesh, 'CG', 2)
 
 # Read the contents of the file back into a new function, `f2`:
 u_read = Function(V_read)
-fFile = HDF5File(MPI.comm_world,"f.h5","r")
-fFile.read(u_read,"/f")
+fFile = HDF5File(MPI.comm_world,"f.h5","a")
+fFile.read(u_read,"f")
 fFile.close()
 
-u_grad = project(grad(u_read), V)
+# u_grad = project(grad(u_read), V)
+u_grad = grad(u_read)
 
-u_array = u_grad.vector().get_local()
-
-max_u = u_array.max()
-u_array /= max_u
-u_grad.vector()[:] = u_array
-# u_grad.vector().set_local(u_array)  # alternative
+# normalize the gradient field
 e3 = u_grad
+e2 = my_cross(u_grad, u_grad)
 
-e2 = cross(e3, e3)
+e2 = sqrt(inner(e2, e2))
+e3 = sqrt(inner(e3, e3))
 
-a = sqrt(0.5) * e2
+# u_array = u_grad.vector().get_local()
+# max_u = u_array.max()
+# u_array /= max_u
+# u_grad.vector()[:] = u_array
+# u_grad.vector().set_local(u_array)  # alternative
+
+exit()
+
+a = sqrt(0.5) * e3
 A = outer(a,a)
-
 
 # Mark boundary subdomians
 left = CompiledSubDomain("near(x[2], side) && on_boundary", side=0.0)
