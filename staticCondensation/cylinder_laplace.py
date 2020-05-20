@@ -14,6 +14,99 @@ import ufl
 
 from petsc4py import PETSc
 
+
+def my_cross(a,b):
+       return as_vector(( a[1]*b[2]-a[2]*b[1],  a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0] ))
+
+def build_nullspace(V):
+    x = Function(V).vector()
+    nullspace_basis = [x.copy() for i in range(6)]
+    V.sub(0).dofmap().set(nullspace_basis[0], 1.0)
+    V.sub(1).dofmap().set(nullspace_basis[1], 1.0)
+    V.sub(2).dofmap().set(nullspace_basis[2], 1.0)
+    V.sub(0).set_x(nullspace_basis[3], -1.0, 1)
+    V.sub(1).set_x(nullspace_basis[3],  1.0, 0)
+    V.sub(0).set_x(nullspace_basis[4],  1.0, 2)
+    V.sub(2).set_x(nullspace_basis[4], -1.0, 0)
+    V.sub(1).set_x(nullspace_basis[5], -1.0, 2)
+    V.sub(2).set_x(nullspace_basis[5],  1.0, 1)
+    for x in nullspace_basis:
+        x.apply("insert")
+    basis = VectorSpaceBasis(nullspace_basis)
+    basis.orthonormalize()
+    return basis
+
+class ProblemWithNullSpace(NonlinearProblem):
+    def __init__(self, J, F, bcs):
+        self.bilinear_form = J
+        self.linear_form = F
+        self.bcs = bcs
+        NonlinearProblem.__init__(self)
+
+    def F(self, b, x):
+        assemble(self.linear_form, tensor=b)
+        for bc in self.bcs:
+            bc.apply(b, x)
+        null_space = build_nullspace(V)
+        null_space.orthogonalize(b)
+
+    def J(self, A, x):
+        assemble(self.bilinear_form, tensor=A)
+        for bc in self.bcs:
+            bc.apply(A)
+
+class SolverWithNullSpace(NewtonSolver):
+    def __init__(self):
+        NewtonSolver.__init__(self, mesh.mpi_comm(),
+                              PETScKrylovSolver("gmres"), PETScFactory.instance())
+
+    def solver_setup(self, A, P, problem, iteration):
+        self.linear_solver().set_operator(A)
+        null_space = build_nullspace(V)
+        as_backend_type(A).set_nullspace(null_space)
+
+        PETScOptions.set("ksp_type", "gmres")
+        PETScOptions.set("ksp_monitor")
+        PETScOptions.set("ksp_max_it", 1000)
+        PETScOptions.set("ksp_gmres_restart", 200)
+        PETScOptions.set("pc_type", "asm")
+        PETScOptions.set("sub_pc_type", "ilu")
+        PETScOptions.set("sub_pc_factor_levels", 10)
+
+        self.linear_solver().set_from_options()
+
+class CustomProblem(NonlinearProblem):
+    def __init__(self, J, F, bcs):
+        self.bilinear_form = J
+        self.linear_form = F
+        self.bcs = bcs
+        NonlinearProblem.__init__(self)
+
+    def F(self, b, x):
+        assemble(self.linear_form, tensor=b)
+        for bc in self.bcs:
+            bc.apply(b, x)
+
+    def J(self, A, x):
+        assemble(self.bilinear_form, tensor=A)
+        for bc in self.bcs:
+            bc.apply(A)
+
+class CustomSolver(NewtonSolver):
+    def __init__(self):
+        NewtonSolver.__init__(self, mesh.mpi_comm(),
+                              PETScKrylovSolver("gmres"), PETScFactory.instance())
+
+    def solver_setup(self, A, P, problem, iteration):
+        self.linear_solver().set_operator(A)
+        PETScOptions.set("ksp_type", "gmres")
+        PETScOptions.set("ksp_monitor")
+        PETScOptions.set("ksp_max_it", 1000)
+        PETScOptions.set("ksp_gmres_restart", 200)
+        PETScOptions.set("pc_type", "asm")
+        PETScOptions.set("sub_pc_type", "lu")
+        self.linear_solver().set_from_options()
+
 # Optimization options for the form compiler
 parameters["form_compiler"]["cpp_optimize"] = True
 parameters["form_compiler"]["quadrature_degree"] = 2
@@ -22,171 +115,59 @@ ffc_options = {"optimize": True, \
                "precompute_basis_const": True, \
                "precompute_ip_const": True}
 
-# Create mesh and define function space
-#mesh = UnitSquareMesh(10, 10)
-# cylinder mesh
+# mesh
 cylinder_o = Cylinder(Point(0, 0, 0), Point(0, 0, 3), 2, 2)
 cylinder_i = Cylinder(Point(0, 0, 0), Point(0, 0, 3), 1, 1)
-
 geometry = cylinder_o - cylinder_i
-
 mesh = generate_mesh(geometry, 10)
-info(mesh)
 n = FacetNormal(mesh)
+info(mesh)
+
+# function space
 V = FunctionSpace(mesh, 'CG', 2)
-V_cyl = VectorFunctionSpace(mesh, 'CG', 2)
+VV = VectorFunctionSpace(mesh, 'CG', 2)
+dv = TrialFunction(V)
+w = TestFunction(V)
+phi = Function(V)
 
-# Mark boundary subdomians
-left = CompiledSubDomain("near(x[2], side) && on_boundary", side=0.0)
-right = CompiledSubDomain("near(x[2], side) && on_boundary", side=3.0)
+# mark boundary subdomians
+bottom = CompiledSubDomain("near(x[2], side) && on_boundary", side=0.0)
+top = CompiledSubDomain("near(x[2], side) && on_boundary", side=3.0)
+inner = CompiledSubDomain("near(sqrt(x[0]*x[0]+x[1]*x[1]), side) && on_boundary", side=1.0)
+outer = CompiledSubDomain("near(sqrt(x[0]*x[0]+x[1]*x[1]), side) && on_boundary", side=2.0)
 
-# Define Dirichlet boundary (x = 0 or x = 1)
-c = Expression(('0', '0', '0'), element=V.ufl_element())
-r = Expression(('0', '0', '0'), element=V.ufl_element())
-
-bc1 = DirichletBC(V, Constant(0.0), left)
-bc2 = DirichletBC(V, Constant(1.0),right)
-
-bcs = [bc1, bc2]
-
-# Define functions
-du = TrialFunction(V)           # Incremental displacement
-v = TestFunction(V)             # Test function
-u = Function(V)                 # Displacement from previous iteration
-
-Pi = 0.5 * dot(grad(u), grad(u)) * dx
-
-# Compute first variation of Pi (directional derivative about u in the direction of v)
-dPi = derivative(Pi, u, v)
-
-# Compute Jacobian of F
-J = derivative(dPi, u, du)
-
-
-# Solve variational problem
-problem = NonlinearVariationalProblem(dPi, u, bcs, J)
-solver  = NonlinearVariationalSolver(problem)
-prm = solver.parameters
-prm['newton_solver']['absolute_tolerance'] = 1E-08
-prm['newton_solver']['relative_tolerance'] = 1E-12
-prm['newton_solver']['maximum_iterations'] = 20
-prm['newton_solver']['relaxation_parameter'] = 1.0
-prm['newton_solver']['lu_solver']['symmetric'] = True
-prm['newton_solver']['krylov_solver']['maximum_iterations'] = 200
-
-solver.solve()
-
-# file = File("laplace.pvd")
-# file << u
-
-# Write `f` to a file:
-fFile = HDF5File(MPI.comm_world,"f2.h5","w")
-fFile.write(u, "f")
-fFile.close()
-
+# write mesh
 mesh_file = File("mesh.xml")
 mesh_file << mesh
 
-exit()
+# boundary conditions
+bc_top = DirichletBC(V, Constant(1.0), top)
+bc_bottom = DirichletBC(V, Constant(0.0), bottom)
+bc_inner = DirichletBC(V, Constant(0.0), inner)
+bc_outer = DirichletBC(V, Constant(1.0), outer)
+bcs_1 = [bc_top, bc_bottom]
+bcs_2 = [bc_inner, bc_outer]
 
-u_grad = grad(u)
+# variational problem
+Pi = 0.5 * dot(grad(phi), grad(phi)) * dx
+dPi = derivative(Pi, phi, w)
+J = derivative(dPi, phi, dv)
 
-# normalize the gradient field
-u_grad = sqrt(inner(u_grad, u_grad))
-
-print(type(u_grad))
-
-e2 = u_grad
-a = sqrt(0.5) * e2
-A = outer(a,a)
-
-#############################################
-print("solving...")
-
-
-VVV = TensorFunctionSpace(mesh, 'DG', 1)
-# Define functions
-du = TrialFunction(V_cyl)            # Incremental displacement
-v = TestFunction(V_cyl)             # Test function
-u = Function(V_cyl)                 # Displacement from previous iteration
-
-# Kinematics
-d = u.geometric_dimension()
-I = Identity(d)             # Identity tensor
-F = I + grad(u)             # Deformation gradient
-# C = variable(F.T*F)                   # Right Cauchy-Green tensor
-C = F.T*F
-A_1 = as_vector([sqrt(0.5), sqrt(0.5), 0])
-M_1 = outer(A_1, A_1)
-J4_1 = tr(C*A)
-A_2 = as_vector([-sqrt(0.5), sqrt(0.5), 0])
-M_2 = outer(A_2, A_2)
-J4_2 = tr(C*A)
-
-# Body forces
-T = Constant((0.0, 0.0, 0.0))  # Traction force on the boundary
-# Body force per unit volume
-B = Expression(('0.0', '0.0', '0.0'), element=V.ufl_element())
-
-# Invariants of deformation tensors
-I1 = tr(C)
-I2 = 1/2*(tr(C)*tr(C) - tr(C*C))
-I3 = det(C)
-eta1 = 141
-eta2 = 160
-eta3 = 3100
-delta = 2*eta1 + 4*eta2 + 2*eta3
-
-e1 = 0.005
-e2 = 10
-
-k1 = 100000
-k2 = 0.04
-
-# compressible Mooney-Rivlin model
-psi_MR = eta1*I1 + eta2*I2 + eta3*I3 - delta*ln(sqrt(I3))
-# penalty
-psi_P = e1*(pow(I3, e2)+pow(I3, -e2)-2)
-# tissue
-# psi_ti_1 = k1/2/k2*(exp(pow(conditional(gt(J4_1,1),conditional(gt(J4_1,2),J4_1-1,2*pow(J4_1-1,2)-pow(J4_1-1,3)),0),2)*k2)-1)
-psi_ti_1 = k1*(exp(k2*conditional(gt(J4_1, 1), pow((J4_1-1), 2), 0))-1)/k2/2
-psi_ti_2 = k1*(exp(k2*conditional(gt(J4_2, 1), pow((J4_2-1), 2), 0))-1)/k2/2
-
-psi = psi_MR  # + psi_P + psi_ti_1 + psi_ti_2
-
-# FacetFunction("size_t", mesh)
-boundaries = MeshFunction('size_t', mesh, mesh.topology().dim()-1)
-boundaries.set_all(0)
-
-
-class Inner(SubDomain):
-    def inside(self, x, on_boundary):
-        return (between(x[1], (-1.1, 1.1)) and between(x[0], (-1.1, 1.1)) and between(x[2], (-0.1, 6)))
-
-
-Inner = Inner()
-Inner.mark(boundaries, 1)
-ds = Measure("ds", domain=mesh, subdomain_data=boundaries)
-
-# Total potential energy
-Pi = psi*dx - dot(B, u)*dx - dot(T, u)*ds - dot(-P*n, u)*ds(1)
-
-# Compute first variation of Pi (directional derivative about u in the direction of v)
-dPi = derivative(Pi, u, v)
-
-# Compute Jacobian of F
-J = derivative(dPi, u, du)
-
-# Solve variational problem
-problem = Problem(J, dPi, bcs)
+# define variational problem for phi_1 and phi_2
+problem_1 = CustomProblem(J, dPi, bcs_1)
+problem_2 = CustomProblem(J, dPi, bcs_2)
 solver = CustomSolver()
-solver.solve(problem, u.vector())
 
-PK2 = 2.0*diff(psi, C)
-PK2Project = project(PK2, VVV)
+# solve and write phi_1
+solver.solve(problem_1, phi.vector())
+fFile = HDF5File(MPI.comm_world,"phi1.h5","w")
+fFile.write(phi, "phi1")
+fFile.close()
 
-file = File("cylinder.pvd")
-file << u
+# solve and write phi_2
+solver.solve(problem_2, phi.vector())
+fFile = HDF5File(MPI.comm_world,"phi2.h5","w")
+fFile.write(phi, "phi2")
+fFile.close()
 
-file = XDMFFile("cylinder.xdmf")
-file.write(PK2Project, 0)
+exit()
